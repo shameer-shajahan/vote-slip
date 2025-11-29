@@ -194,7 +194,7 @@
 
         .slip-label {
             font-weight: bold;
-            font-size: 22px;
+            font-size: 16px;
             min-width: 200px;
         }
 
@@ -588,7 +588,7 @@
                 const pdf = new jsPDF('p', 'mm', 'a4');
                 const pageWidth = 210;
                 const pageHeight = 297;
-                const slipSpacing = 5; // 0.5cm = 5mm spacing between slips
+                const slipSpacing = 15; // 0.5cm = 5mm spacing between slips
                 const availableHeight = pageHeight - (slipSpacing * (SLIPS_PER_PAGE - 1));
                 const slipHeight = availableHeight / SLIPS_PER_PAGE;
 

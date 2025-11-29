@@ -481,10 +481,24 @@
             const slipsContainer = document.getElementById('slipsContainer');
             slipsContainer.innerHTML = '';
 
-            // Generate slips in sequential order
-            for (let i = 0; i < allData.length; i++) {
+            // Only generate first 20 slips for preview
+            const previewCount = Math.min(20, allData.length);
+            
+            for (let i = 0; i < previewCount; i++) {
                 const slip = createSlip(allData[i], i + 1);
                 slipsContainer.appendChild(slip);
+            }
+
+            // Show message if there are more slips
+            if (allData.length > previewCount) {
+                const messageDiv = document.createElement('div');
+                messageDiv.style.cssText = 'text-align: center; padding: 30px; background: #f8f9ff; border-radius: 10px; margin: 20px 0;';
+                messageDiv.innerHTML = `
+                    <h3 style="color: #667eea; margin-bottom: 10px;">📋 Preview Limited</h3>
+                    <p style="color: #666; font-size: 16px;">Showing first ${previewCount} slips of ${allData.length} total</p>
+                    <p style="color: #666; font-size: 14px; margin-top: 10px;">Click "Download PDF" to generate all ${allData.length} slips</p>
+                `;
+                slipsContainer.appendChild(messageDiv);
             }
 
             document.getElementById('previewSection').classList.add('hidden');
@@ -557,87 +571,120 @@
         }
 
         async function downloadPDF() {
-            const slipsContainer = document.getElementById('slipsContainer');
-            const slips = slipsContainer.querySelectorAll('.slip-preview');
-            
-            if (slips.length === 0) {
-                alert('No slips to generate PDF');
-                return;
-            }
-
-            // Show progress indicator
-            const progressDiv = document.createElement('div');
-            progressDiv.id = 'pdfProgress';
-            progressDiv.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); z-index: 9999; text-align: center;';
-            progressDiv.innerHTML = '<h3 style="margin-bottom: 15px;">Generating PDF...</h3><div style="font-size: 24px; font-weight: bold; color: #667eea;" id="progressText">0%</div><p style="margin-top: 10px; color: #666;">Please wait, processing slips...</p>';
-            document.body.appendChild(progressDiv);
-
-            const { jsPDF } = window.jspdf;
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            const pageWidth = 210;
-            const pageHeight = 297;
-            const slipSpacing = 2;
-            const availableHeight = pageHeight - (slipSpacing * (SLIPS_PER_PAGE - 1));
-            const slipHeight = availableHeight / SLIPS_PER_PAGE;
-
-            let isFirstPage = true;
-            const totalSlips = slips.length;
-
-            // Process slips in groups of 4 per page
-            for (let i = 0; i < slips.length; i += SLIPS_PER_PAGE) {
-                if (!isFirstPage) {
-                    pdf.addPage();
-                }
-                isFirstPage = false;
-
-                // Update progress
-                const progress = Math.round((i / totalSlips) * 100);
-                document.getElementById('progressText').textContent = progress + '%';
-
-                // Process 4 slips for this page
-                const pageSlips = [];
-                for (let j = 0; j < SLIPS_PER_PAGE && (i + j) < slips.length; j++) {
-                    pageSlips.push({
-                        slip: slips[i + j],
-                        index: j
-                    });
+            try {
+                if (!allData || allData.length === 0) {
+                    alert('No data available. Please upload data first.');
+                    return;
                 }
 
-                // Render all slips for this page in parallel
-                const canvasPromises = pageSlips.map(({slip}) => 
-                    html2canvas(slip, {
-                        scale: 2, // Reduced from 3 to 2 for speed
-                        useCORS: true,
-                        logging: false,
-                        backgroundColor: '#ffffff',
-                        allowTaint: true
-                    })
-                );
+                // Show progress indicator
+                const progressDiv = document.createElement('div');
+                progressDiv.id = 'pdfProgress';
+                progressDiv.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); z-index: 9999; text-align: center; min-width: 300px;';
+                progressDiv.innerHTML = '<h3 style="margin-bottom: 15px;">Generating PDF...</h3><div style="font-size: 24px; font-weight: bold; color: #667eea;" id="progressText">0%</div><p style="margin-top: 10px; color: #666;" id="progressDetail">Preparing...</p>';
+                document.body.appendChild(progressDiv);
 
-                try {
-                    const canvases = await Promise.all(canvasPromises);
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const pageWidth = 210;
+                const pageHeight = 297;
+                const slipSpacing = 2;
+                const availableHeight = pageHeight - (slipSpacing * (SLIPS_PER_PAGE - 1));
+                const slipHeight = availableHeight / SLIPS_PER_PAGE;
+
+                let isFirstPage = true;
+                const totalSlips = allData.length;
+                
+                console.log('Starting PDF generation for', totalSlips, 'slips');
+                
+                // Create a temporary container for rendering
+                const tempContainer = document.createElement('div');
+                tempContainer.style.cssText = 'position: absolute; left: -9999px; top: 0; width: 800px;';
+                document.body.appendChild(tempContainer);
+
+                // Process slips in groups of 4 per page
+                for (let i = 0; i < allData.length; i += SLIPS_PER_PAGE) {
+                    if (!isFirstPage) {
+                        pdf.addPage();
+                    }
+                    isFirstPage = false;
+
+                    // Update progress
+                    const progress = Math.round((i / totalSlips) * 100);
+                    document.getElementById('progressText').textContent = progress + '%';
+                    document.getElementById('progressDetail').textContent = `Processing slip ${i + 1} to ${Math.min(i + SLIPS_PER_PAGE, totalSlips)} of ${totalSlips}`;
+
+                    // Create slips for this page
+                    tempContainer.innerHTML = '';
+                    const pageSlips = [];
                     
-                    // Add all rendered slips to PDF
-                    canvases.forEach((canvas, idx) => {
-                        const yOffset = (pageSlips[idx].index * slipHeight) + (pageSlips[idx].index * slipSpacing);
-                        const imgData = canvas.toDataURL('image/png');
-                        const imgWidth = pageWidth;
-                        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-                        pdf.addImage(imgData, 'PNG', 0, yOffset, imgWidth, Math.min(imgHeight, slipHeight));
-                    });
+                    for (let j = 0; j < SLIPS_PER_PAGE && (i + j) < allData.length; j++) {
+                        const slip = createSlip(allData[i + j], i + j + 1);
+                        tempContainer.appendChild(slip);
+                        pageSlips.push({
+                            slip: slip,
+                            index: j
+                        });
+                    }
+
+                    // Wait for images to load
+                    await new Promise(resolve => setTimeout(resolve, 150));
+
+                    // Render slips one by one (more stable for large datasets)
+                    for (let idx = 0; idx < pageSlips.length; idx++) {
+                        try {
+                            const canvas = await html2canvas(pageSlips[idx].slip, {
+                                scale: 1.5, // Reduced from 2 to save memory
+                                useCORS: true,
+                                logging: false,
+                                backgroundColor: '#ffffff',
+                                allowTaint: true,
+                                imageTimeout: 0
+                            });
+                            
+                            const yOffset = (pageSlips[idx].index * slipHeight) + (pageSlips[idx].index * slipSpacing);
+                            // Use JPEG with compression for smaller file size
+                            const imgData = canvas.toDataURL('image/jpeg', 0.75);
+                            const imgWidth = pageWidth;
+                            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                            pdf.addImage(imgData, 'JPEG', 0, yOffset, imgWidth, Math.min(imgHeight, slipHeight), undefined, 'FAST');
+                            
+                            // Clear canvas to free memory
+                            canvas.width = 0;
+                            canvas.height = 0;
+                        } catch (error) {
+                            console.error('Error rendering slip:', i + idx, error);
+                        }
+                    }
 
                     // Small delay to keep UI responsive
-                    await new Promise(resolve => setTimeout(resolve, 10));
-                } catch (error) {
-                    console.error('Error generating page:', error);
+                    await new Promise(resolve => setTimeout(resolve, 50));
                 }
+
+                console.log('PDF generation complete');
+
+                // Clean up
+                document.body.removeChild(tempContainer);
+                
+                // Update progress to 100%
+                document.getElementById('progressText').textContent = '100%';
+                document.getElementById('progressDetail').textContent = 'Saving PDF...';
+                
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                pdf.save('malayalam-slips.pdf');
+                
+                document.body.removeChild(progressDiv);
+                alert('✓ PDF generated successfully with ' + totalSlips + ' slips!');
+                
+            } catch (error) {
+                console.error('PDF Generation Error:', error);
+                const progressDiv = document.getElementById('pdfProgress');
+                if (progressDiv) {
+                    document.body.removeChild(progressDiv);
+                }
+                alert('❌ Error generating PDF: ' + error.message + '\n\nPlease check the browser console for details.');
             }
-
-            // Remove progress indicator
-            document.body.removeChild(progressDiv);
-
-            pdf.save('malayalam-slips.pdf');
-            alert('✓ PDF generated successfully with ' + totalSlips + ' slips!');
         }
     </script>
 </body>

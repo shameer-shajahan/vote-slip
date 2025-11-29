@@ -131,7 +131,7 @@
             background: white;
             page-break-inside: avoid;
             display: flex;
-            gap: 20px;
+            gap: 15px;
         }
 
         .slip-image {
@@ -154,7 +154,7 @@
 
         .slip-number {
             text-align: right;
-            font-size: 18px;
+            font-size: 24px;
             font-weight: bold;
             margin-bottom: 15px;
             padding-bottom: 10px;
@@ -166,12 +166,13 @@
 
         .slip-number .sl-no {
             text-align: left;
+            font-size: 24px;
         }
 
         .slip-number .id-no {
             text-align: right;
             font-weight: 900;
-            font-size: 20px;
+            font-size: 26px;
         }
 
         .slip-title {
@@ -185,20 +186,20 @@
 
         .slip-field {
             display: flex;
-            padding: 8px 0;
-            font-size: 16px;
+            padding: 10px 0;
+            font-size: 22px;
             border-bottom: 1px dotted #ccc;
             align-items: center;
         }
 
         .slip-label {
             font-weight: bold;
-            font-size: 16px;
+            font-size: 22px;
             min-width: 200px;
         }
 
         .slip-value {
-            font-size: 20px;
+            font-size: 26px;
             font-weight: bold;
             flex: 1;
             text-align: center;
@@ -215,7 +216,7 @@
         #slipsContainer {
             display: flex;
             flex-direction: column;
-            gap: 0;
+            gap: 2px;
         }
 
         .stats {
@@ -480,17 +481,24 @@
             const slipsContainer = document.getElementById('slipsContainer');
             slipsContainer.innerHTML = '';
 
-            const totalPages = Math.ceil(allData.length / SLIPS_PER_PAGE);
+            // Only generate first 20 slips for preview
+            const previewCount = Math.min(20, allData.length);
+            
+            for (let i = 0; i < previewCount; i++) {
+                const slip = createSlip(allData[i], i + 1);
+                slipsContainer.appendChild(slip);
+            }
 
-            for (let pageNum = 0; pageNum < totalPages; pageNum++) {
-                for (let slipPos = 0; slipPos < SLIPS_PER_PAGE; slipPos++) {
-                    const dataIndex = pageNum + (slipPos * totalPages);
-
-                    if (dataIndex < allData.length) {
-                        const slip = createSlip(allData[dataIndex], dataIndex + 1);
-                        slipsContainer.appendChild(slip);
-                    }
-                }
+            // Show message if there are more slips
+            if (allData.length > previewCount) {
+                const messageDiv = document.createElement('div');
+                messageDiv.style.cssText = 'text-align: center; padding: 30px; background: #f8f9ff; border-radius: 10px; margin: 20px 0;';
+                messageDiv.innerHTML = `
+                    <h3 style="color: #667eea; margin-bottom: 10px;">📋 Preview Limited</h3>
+                    <p style="color: #666; font-size: 16px;">Showing first ${previewCount} slips of ${allData.length} total</p>
+                    <p style="color: #666; font-size: 14px; margin-top: 10px;">Click "Download PDF" to generate all ${allData.length} slips</p>
+                `;
+                slipsContainer.appendChild(messageDiv);
             }
 
             document.getElementById('previewSection').classList.add('hidden');
@@ -563,55 +571,129 @@
         }
 
         async function downloadPDF() {
-            const slipsContainer = document.getElementById('slipsContainer');
-            const slips = slipsContainer.querySelectorAll('.slip-preview');
-            
-            if (slips.length === 0) {
-                alert('No slips to generate PDF');
-                return;
-            }
-
-            const { jsPDF } = window.jspdf;
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            const pageWidth = 210; // A4 width in mm
-            const pageHeight = 297; // A4 height in mm
-            const slipHeight = pageHeight / SLIPS_PER_PAGE;
-
-            let isFirstPage = true;
-
-            // Process slips in groups of 4 per page
-            for (let i = 0; i < slips.length; i += SLIPS_PER_PAGE) {
-                if (!isFirstPage) {
-                    pdf.addPage();
+            try {
+                if (!allData || allData.length === 0) {
+                    alert('No data available. Please upload data first.');
+                    return;
                 }
-                isFirstPage = false;
 
-                // Add up to 4 slips per page
-                for (let j = 0; j < SLIPS_PER_PAGE && (i + j) < slips.length; j++) {
-                    const slip = slips[i + j];
-                    const yOffset = j * slipHeight;
+                // Show progress indicator
+                const progressDiv = document.createElement('div');
+                progressDiv.id = 'pdfProgress';
+                progressDiv.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); z-index: 9999; text-align: center; min-width: 300px;';
+                progressDiv.innerHTML = '<h3 style="margin-bottom: 15px;">Generating PDF...</h3><div style="font-size: 24px; font-weight: bold; color: #667eea;" id="progressText">0%</div><p style="margin-top: 10px; color: #666;" id="progressDetail">Preparing...</p>';
+                document.body.appendChild(progressDiv);
 
-                    try {
-                        const canvas = await html2canvas(slip, {
-                            scale: 2,
-                            useCORS: true,
-                            logging: false,
-                            backgroundColor: '#ffffff'
-                        });
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const pageWidth = 210;
+                const pageHeight = 297;
+                const slipSpacing = 5; // 0.5cm = 5mm spacing between slips
+                const availableHeight = pageHeight - (slipSpacing * (SLIPS_PER_PAGE - 1));
+                const slipHeight = availableHeight / SLIPS_PER_PAGE;
 
-                        const imgData = canvas.toDataURL('image/png');
-                        const imgWidth = pageWidth - 10; // 5mm margin on each side
-                        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                const totalSlips = allData.length;
+                const totalPages = Math.ceil(totalSlips / SLIPS_PER_PAGE);
+                
+                console.log('Starting PDF generation for', totalSlips, 'slips across', totalPages, 'pages');
+                
+                // Create a temporary container for rendering
+                const tempContainer = document.createElement('div');
+                tempContainer.style.cssText = 'position: absolute; left: -9999px; top: 0; width: 800px;';
+                document.body.appendChild(tempContainer);
 
-                        pdf.addImage(imgData, 'PNG', 5, yOffset + 5, imgWidth, Math.min(imgHeight, slipHeight - 10));
-                    } catch (error) {
-                        console.error('Error generating slip:', error);
+                // Process each page
+                for (let pageNum = 0; pageNum < totalPages; pageNum++) {
+                    if (pageNum > 0) {
+                        pdf.addPage();
                     }
-                }
-            }
 
-            pdf.save('malayalam-slips.pdf');
-            alert('✓ PDF generated successfully with Malayalam text!');
+                    // Update progress
+                    const progress = Math.round((pageNum / totalPages) * 100);
+                    document.getElementById('progressText').textContent = progress + '%';
+                    document.getElementById('progressDetail').textContent = `Processing page ${pageNum + 1} of ${totalPages}`;
+
+                    // Create slips for this page using the new pattern
+                    tempContainer.innerHTML = '';
+                    const pageSlips = [];
+                    
+                    // Calculate which slips go on this page
+                    // Position 0 (top): slip 1, 2, 3, 4...
+                    // Position 1 (second): slip 26, 27, 28, 29... (pageNum + totalPages)
+                    // Position 2 (third): slip 51, 52, 53, 54... (pageNum + 2*totalPages)
+                    // Position 3 (fourth): slip 76, 77, 78, 79... (pageNum + 3*totalPages)
+                    
+                    for (let position = 0; position < SLIPS_PER_PAGE; position++) {
+                        const slipIndex = pageNum + (position * totalPages);
+                        
+                        if (slipIndex < totalSlips) {
+                            const slip = createSlip(allData[slipIndex], slipIndex + 1);
+                            tempContainer.appendChild(slip);
+                            pageSlips.push({
+                                slip: slip,
+                                index: position
+                            });
+                        }
+                    }
+
+                    // Wait for images to load
+                    await new Promise(resolve => setTimeout(resolve, 150));
+
+                    // Render slips one by one (more stable for large datasets)
+                    for (let idx = 0; idx < pageSlips.length; idx++) {
+                        try {
+                            const canvas = await html2canvas(pageSlips[idx].slip, {
+                                scale: 1.5, // Reduced from 2 to save memory
+                                useCORS: true,
+                                logging: false,
+                                backgroundColor: '#ffffff',
+                                allowTaint: true,
+                                imageTimeout: 0
+                            });
+                            
+                            const yOffset = (pageSlips[idx].index * slipHeight) + (pageSlips[idx].index * slipSpacing);
+                            // Use JPEG with compression for smaller file size
+                            const imgData = canvas.toDataURL('image/jpeg', 0.75);
+                            const imgWidth = pageWidth;
+                            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                            pdf.addImage(imgData, 'JPEG', 0, yOffset, imgWidth, Math.min(imgHeight, slipHeight), undefined, 'FAST');
+                            
+                            // Clear canvas to free memory
+                            canvas.width = 0;
+                            canvas.height = 0;
+                        } catch (error) {
+                            console.error('Error rendering slip:', pageNum, 'position', idx, error);
+                        }
+                    }
+
+                    // Small delay to keep UI responsive
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                }
+
+                console.log('PDF generation complete');
+
+                // Clean up
+                document.body.removeChild(tempContainer);
+                
+                // Update progress to 100%
+                document.getElementById('progressText').textContent = '100%';
+                document.getElementById('progressDetail').textContent = 'Saving PDF...';
+                
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                pdf.save('malayalam-slips.pdf');
+                
+                document.body.removeChild(progressDiv);
+                alert('✓ PDF generated successfully with ' + totalSlips + ' slips!');
+                
+            } catch (error) {
+                console.error('PDF Generation Error:', error);
+                const progressDiv = document.getElementById('pdfProgress');
+                if (progressDiv) {
+                    document.body.removeChild(progressDiv);
+                }
+                alert('❌ Error generating PDF: ' + error.message + '\n\nPlease check the browser console for details.');
+            }
         }
     </script>
 </body>

@@ -194,15 +194,15 @@
 
         .slip-label {
             font-weight: bold;
-            font-size: 22px;
-            min-width: 200px;
+            font-size: 16px;
+            min-width: 180px;
         }
 
         .slip-value {
-            font-size: 26px;
+            font-size: 20px;
             font-weight: bold;
             flex: 1;
-            text-align: center;
+            text-align: right;
         }
 
         .slip-value.last-column {
@@ -495,8 +495,8 @@
                 messageDiv.style.cssText = 'text-align: center; padding: 30px; background: #f8f9ff; border-radius: 10px; margin: 20px 0;';
                 messageDiv.innerHTML = `
                     <h3 style="color: #667eea; margin-bottom: 10px;">📋 Preview Limited</h3>
-                    <p style="color: #666; font-size: 16px;">Showing first ${previewCount} slips of ${allData.length} total</p>
-                    <p style="color: #666; font-size: 14px; margin-top: 10px;">Click "Download PDF" to generate all ${allData.length} slips</p>
+                    <p style="color: #666; font-size: 14px;">Showing first ${previewCount} slips of ${allData.length} total</p>
+                    <p style="color: #666; font-size: 12px; margin-top: 10px;">Click "Download PDF" to generate all ${allData.length} slips</p>
                 `;
                 slipsContainer.appendChild(messageDiv);
             }
@@ -588,43 +588,52 @@
                 const pdf = new jsPDF('p', 'mm', 'a4');
                 const pageWidth = 210;
                 const pageHeight = 297;
-                const slipSpacing = 2;
+                const slipSpacing = 15; // 0.5cm = 5mm spacing between slips
                 const availableHeight = pageHeight - (slipSpacing * (SLIPS_PER_PAGE - 1));
                 const slipHeight = availableHeight / SLIPS_PER_PAGE;
 
-                let isFirstPage = true;
                 const totalSlips = allData.length;
+                const totalPages = Math.ceil(totalSlips / SLIPS_PER_PAGE);
                 
-                console.log('Starting PDF generation for', totalSlips, 'slips');
+                console.log('Starting PDF generation for', totalSlips, 'slips across', totalPages, 'pages');
                 
                 // Create a temporary container for rendering
                 const tempContainer = document.createElement('div');
                 tempContainer.style.cssText = 'position: absolute; left: -9999px; top: 0; width: 800px;';
                 document.body.appendChild(tempContainer);
 
-                // Process slips in groups of 4 per page
-                for (let i = 0; i < allData.length; i += SLIPS_PER_PAGE) {
-                    if (!isFirstPage) {
+                // Process each page
+                for (let pageNum = 0; pageNum < totalPages; pageNum++) {
+                    if (pageNum > 0) {
                         pdf.addPage();
                     }
-                    isFirstPage = false;
 
                     // Update progress
-                    const progress = Math.round((i / totalSlips) * 100);
+                    const progress = Math.round((pageNum / totalPages) * 100);
                     document.getElementById('progressText').textContent = progress + '%';
-                    document.getElementById('progressDetail').textContent = `Processing slip ${i + 1} to ${Math.min(i + SLIPS_PER_PAGE, totalSlips)} of ${totalSlips}`;
+                    document.getElementById('progressDetail').textContent = `Processing page ${pageNum + 1} of ${totalPages}`;
 
-                    // Create slips for this page
+                    // Create slips for this page using the new pattern
                     tempContainer.innerHTML = '';
                     const pageSlips = [];
                     
-                    for (let j = 0; j < SLIPS_PER_PAGE && (i + j) < allData.length; j++) {
-                        const slip = createSlip(allData[i + j], i + j + 1);
-                        tempContainer.appendChild(slip);
-                        pageSlips.push({
-                            slip: slip,
-                            index: j
-                        });
+                    // Calculate which slips go on this page
+                    // Position 0 (top): slip 1, 2, 3, 4...
+                    // Position 1 (second): slip 26, 27, 28, 29... (pageNum + totalPages)
+                    // Position 2 (third): slip 51, 52, 53, 54... (pageNum + 2*totalPages)
+                    // Position 3 (fourth): slip 76, 77, 78, 79... (pageNum + 3*totalPages)
+                    
+                    for (let position = 0; position < SLIPS_PER_PAGE; position++) {
+                        const slipIndex = pageNum + (position * totalPages);
+                        
+                        if (slipIndex < totalSlips) {
+                            const slip = createSlip(allData[slipIndex], slipIndex + 1);
+                            tempContainer.appendChild(slip);
+                            pageSlips.push({
+                                slip: slip,
+                                index: position
+                            });
+                        }
                     }
 
                     // Wait for images to load
@@ -653,7 +662,7 @@
                             canvas.width = 0;
                             canvas.height = 0;
                         } catch (error) {
-                            console.error('Error rendering slip:', i + idx, error);
+                            console.error('Error rendering slip:', pageNum, 'position', idx, error);
                         }
                     }
 

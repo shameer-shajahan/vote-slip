@@ -481,17 +481,24 @@
             const slipsContainer = document.getElementById('slipsContainer');
             slipsContainer.innerHTML = '';
 
-            const totalPages = Math.ceil(allData.length / SLIPS_PER_PAGE);
+            // Only generate first 20 slips for preview
+            const previewCount = Math.min(20, allData.length);
+            
+            for (let i = 0; i < previewCount; i++) {
+                const slip = createSlip(allData[i], i + 1);
+                slipsContainer.appendChild(slip);
+            }
 
-            for (let pageNum = 0; pageNum < totalPages; pageNum++) {
-                for (let slipPos = 0; slipPos < SLIPS_PER_PAGE; slipPos++) {
-                    const dataIndex = pageNum + (slipPos * totalPages);
-
-                    if (dataIndex < allData.length) {
-                        const slip = createSlip(allData[dataIndex], dataIndex + 1);
-                        slipsContainer.appendChild(slip);
-                    }
-                }
+            // Show message if there are more slips
+            if (allData.length > previewCount) {
+                const messageDiv = document.createElement('div');
+                messageDiv.style.cssText = 'text-align: center; padding: 30px; background: #f8f9ff; border-radius: 10px; margin: 20px 0;';
+                messageDiv.innerHTML = `
+                    <h3 style="color: #667eea; margin-bottom: 10px;">📋 Preview Limited</h3>
+                    <p style="color: #666; font-size: 16px;">Showing first ${previewCount} slips of ${allData.length} total</p>
+                    <p style="color: #666; font-size: 14px; margin-top: 10px;">Click "Download PDF" to generate all ${allData.length} slips</p>
+                `;
+                slipsContainer.appendChild(messageDiv);
             }
 
             document.getElementById('previewSection').classList.add('hidden');
@@ -564,58 +571,120 @@
         }
 
         async function downloadPDF() {
-            const slipsContainer = document.getElementById('slipsContainer');
-            const slips = slipsContainer.querySelectorAll('.slip-preview');
-            
-            if (slips.length === 0) {
-                alert('No slips to generate PDF');
-                return;
-            }
-
-            const { jsPDF } = window.jspdf;
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            const pageWidth = 210; // A4 width in mm
-            const pageHeight = 297; // A4 height in mm
-            const slipSpacing = 2; // 2px spacing between slips
-            const availableHeight = pageHeight - (slipSpacing * (SLIPS_PER_PAGE - 1));
-            const slipHeight = availableHeight / SLIPS_PER_PAGE;
-
-            let isFirstPage = true;
-
-            // Process slips in groups of 4 per page
-            for (let i = 0; i < slips.length; i += SLIPS_PER_PAGE) {
-                if (!isFirstPage) {
-                    pdf.addPage();
+            try {
+                if (!allData || allData.length === 0) {
+                    alert('No data available. Please upload data first.');
+                    return;
                 }
-                isFirstPage = false;
 
-                // Add up to 4 slips per page
-                for (let j = 0; j < SLIPS_PER_PAGE && (i + j) < slips.length; j++) {
-                    const slip = slips[i + j];
-                    const yOffset = (j * slipHeight) + (j * slipSpacing);
+                // Show progress indicator
+                const progressDiv = document.createElement('div');
+                progressDiv.id = 'pdfProgress';
+                progressDiv.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); z-index: 9999; text-align: center; min-width: 300px;';
+                progressDiv.innerHTML = '<h3 style="margin-bottom: 15px;">Generating PDF...</h3><div style="font-size: 24px; font-weight: bold; color: #667eea;" id="progressText">0%</div><p style="margin-top: 10px; color: #666;" id="progressDetail">Preparing...</p>';
+                document.body.appendChild(progressDiv);
 
-                    try {
-                        const canvas = await html2canvas(slip, {
-                            scale: 3,
-                            useCORS: true,
-                            logging: false,
-                            backgroundColor: '#ffffff',
-                            allowTaint: true
-                        });
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const pageWidth = 210;
+                const pageHeight = 297;
+                const slipSpacing = 2;
+                const availableHeight = pageHeight - (slipSpacing * (SLIPS_PER_PAGE - 1));
+                const slipHeight = availableHeight / SLIPS_PER_PAGE;
 
-                        const imgData = canvas.toDataURL('image/png');
-                        const imgWidth = pageWidth;
-                        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                let isFirstPage = true;
+                const totalSlips = allData.length;
+                
+                console.log('Starting PDF generation for', totalSlips, 'slips');
+                
+                // Create a temporary container for rendering
+                const tempContainer = document.createElement('div');
+                tempContainer.style.cssText = 'position: absolute; left: -9999px; top: 0; width: 800px;';
+                document.body.appendChild(tempContainer);
 
-                        pdf.addImage(imgData, 'PNG', 0, yOffset, imgWidth, Math.min(imgHeight, slipHeight));
-                    } catch (error) {
-                        console.error('Error generating slip:', error);
+                // Process slips in groups of 4 per page
+                for (let i = 0; i < allData.length; i += SLIPS_PER_PAGE) {
+                    if (!isFirstPage) {
+                        pdf.addPage();
                     }
-                }
-            }
+                    isFirstPage = false;
 
-            pdf.save('malayalam-slips.pdf');
-            alert('✓ PDF generated successfully with Malayalam text!');
+                    // Update progress
+                    const progress = Math.round((i / totalSlips) * 100);
+                    document.getElementById('progressText').textContent = progress + '%';
+                    document.getElementById('progressDetail').textContent = `Processing slip ${i + 1} to ${Math.min(i + SLIPS_PER_PAGE, totalSlips)} of ${totalSlips}`;
+
+                    // Create slips for this page
+                    tempContainer.innerHTML = '';
+                    const pageSlips = [];
+                    
+                    for (let j = 0; j < SLIPS_PER_PAGE && (i + j) < allData.length; j++) {
+                        const slip = createSlip(allData[i + j], i + j + 1);
+                        tempContainer.appendChild(slip);
+                        pageSlips.push({
+                            slip: slip,
+                            index: j
+                        });
+                    }
+
+                    // Wait for images to load
+                    await new Promise(resolve => setTimeout(resolve, 150));
+
+                    // Render slips one by one (more stable for large datasets)
+                    for (let idx = 0; idx < pageSlips.length; idx++) {
+                        try {
+                            const canvas = await html2canvas(pageSlips[idx].slip, {
+                                scale: 1.5, // Reduced from 2 to save memory
+                                useCORS: true,
+                                logging: false,
+                                backgroundColor: '#ffffff',
+                                allowTaint: true,
+                                imageTimeout: 0
+                            });
+                            
+                            const yOffset = (pageSlips[idx].index * slipHeight) + (pageSlips[idx].index * slipSpacing);
+                            // Use JPEG with compression for smaller file size
+                            const imgData = canvas.toDataURL('image/jpeg', 0.75);
+                            const imgWidth = pageWidth;
+                            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                            pdf.addImage(imgData, 'JPEG', 0, yOffset, imgWidth, Math.min(imgHeight, slipHeight), undefined, 'FAST');
+                            
+                            // Clear canvas to free memory
+                            canvas.width = 0;
+                            canvas.height = 0;
+                        } catch (error) {
+                            console.error('Error rendering slip:', i + idx, error);
+                        }
+                    }
+
+                    // Small delay to keep UI responsive
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                }
+
+                console.log('PDF generation complete');
+
+                // Clean up
+                document.body.removeChild(tempContainer);
+                
+                // Update progress to 100%
+                document.getElementById('progressText').textContent = '100%';
+                document.getElementById('progressDetail').textContent = 'Saving PDF...';
+                
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                pdf.save('malayalam-slips.pdf');
+                
+                document.body.removeChild(progressDiv);
+                alert('✓ PDF generated successfully with ' + totalSlips + ' slips!');
+                
+            } catch (error) {
+                console.error('PDF Generation Error:', error);
+                const progressDiv = document.getElementById('pdfProgress');
+                if (progressDiv) {
+                    document.body.removeChild(progressDiv);
+                }
+                alert('❌ Error generating PDF: ' + error.message + '\n\nPlease check the browser console for details.');
+            }
         }
     </script>
 </body>

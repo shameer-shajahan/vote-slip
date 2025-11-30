@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Malayalam Slip Generator</title>
+    <title>Vote Slip Generator</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -17,9 +17,41 @@
 
         body {
             font-family: Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        @keyframes watermark-scroll {
+            0% {
+                transform: translateY(0) translateX(0);
+            }
+            100% {
+                transform: translateY(-50px) translateX(-50px);
+            }
+        }
+
+        .watermark-layer {
+            position: fixed;
+            top: -100px;
+            left: -100px;
+            width: calc(100% + 200px);
+            height: calc(100% + 200px);
+            z-index: 0;
+            pointer-events: none;
+            overflow: hidden;
+            animation: watermark-scroll 20s linear infinite;
+        }
+
+        .watermark-text {
+            position: absolute;
+            font-size: 16px;
+            font-weight: 600;
+            color: rgba(102, 126, 234, 0.08);
+            white-space: nowrap;
+            transform: rotate(-45deg);
+            user-select: none;
         }
 
         .container {
@@ -30,6 +62,8 @@
             width: 100%;
             padding: 40px;
             margin: 0 auto;
+            position: relative;
+            z-index: 1;
         }
 
         h1 {
@@ -175,15 +209,6 @@
             font-size: 26px;
         }
 
-        .slip-title {
-            text-align: center;
-            font-size: 20px;
-            font-weight: bold;
-            border-bottom: 2px solid #000;
-            padding-bottom: 10px;
-            margin-bottom: 15px;
-        }
-
         .slip-field {
             display: flex;
             padding: 10px 0;
@@ -203,10 +228,6 @@
             font-weight: bold;
             flex: 1;
             text-align: right;
-        }
-
-        .slip-value.last-column {
-            font-weight: bold;
         }
 
         .hidden {
@@ -238,6 +259,12 @@
                 background: white;
             }
 
+            body::before,
+            body::after,
+            .watermark-layer {
+                display: none !important;
+            }
+
             .container {
                 box-shadow: none;
             }
@@ -253,19 +280,47 @@
 </head>
 
 <body>
-    <div class="container">
-        <h1>📄 Malayalam Slip Generator</h1>
+    <script>
+        const watermarkLayer = document.createElement('div');
+        watermarkLayer.className = 'watermark-layer';
+        
+        const text = 'Developed by Shameer Shajahan';
+        const rows = 40;
+        const cols = 8;
+        
+        for (let i = 0; i < rows; i++) {
+            for (let j = 0; j < cols; j++) {
+                const span = document.createElement('span');
+                span.className = 'watermark-text';
+                span.textContent = text;
+                span.style.top = (i * 80) + 'px';
+                span.style.left = (j * 250) + 'px';
+                watermarkLayer.appendChild(span);
+            }
+        }
+        
+        document.body.insertBefore(watermarkLayer, document.body.firstChild);
+    </script>
 
-        <div class="alert">
-            <h3>⚠️ IMPORTANT: Excel Malayalam Fix</h3>
-            <p><strong>If Malayalam shows as garbled text:</strong></p>
-            <p>1. Open Excel → File → Save As</p>
-            <p>2. Select: <strong>"CSV UTF-8 (Comma delimited)"</strong></p>
-            <p>3. Save and upload the CSV file instead</p>
-            <p><strong>OR</strong> Copy-paste data from Excel directly below</p>
-        </div>
+    <div class="container">
+        <h1>📄 Vote Slip Generator</h1>
 
         <div id="uploadSection">
+            <div style="text-align: center; margin: 30px 0; padding: 20px; background: #f8f9ff; border-radius: 10px;">
+                <h3 style="color: #333; margin-bottom: 15px;">🖼️ Add Logo/Image to Slips (Optional)</h3>
+                <p style="color: #666; margin-bottom: 15px;">⚠️ Upload image BEFORE adding data for best results</p>
+                <div class="upload-section" style="padding: 20px; margin: 10px 0;" onclick="document.getElementById('imageInput').click()">
+                    <input type="file" id="imageInput" accept="image/*">
+                    <p style="color: #666;">Click to upload an image (Logo, Photo, etc.)</p>
+                    <p style="color: #999; font-size: 12px; margin-top: 5px;">Image will appear on the left side of each slip</p>
+                </div>
+                <div id="imagePreview" class="hidden" style="margin-top: 15px;">
+                    <img id="previewImg" style="max-width: 150px; max-height: 150px; border: 2px solid #667eea; border-radius: 10px;">
+                    <p style="margin-top: 10px; color: #667eea; font-weight: 600;">✓ Image uploaded successfully</p>
+                    <button class="btn" onclick="removeImage()" style="padding: 8px 20px; font-size: 14px; margin-top: 10px;">Remove Image</button>
+                </div>
+            </div>
+
             <div class="upload-section" onclick="document.getElementById('fileInput').click()">
                 <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
                 <h2>📤 Click to Upload Excel/CSV</h2>
@@ -277,20 +332,6 @@
                 <textarea id="pasteArea" placeholder="Paste your Excel data here (Ctrl+C from Excel, Ctrl+V here)"
                     style="width: 100%; height: 200px; padding: 15px; border: 2px solid #667eea; border-radius: 10px; font-family: Arial; font-size: 14px;"></textarea>
                 <button class="btn" onclick="processPastedData()">Process Pasted Data</button>
-            </div>
-
-            <div style="text-align: center; margin: 30px 0; padding: 20px; background: #f8f9ff; border-radius: 10px;">
-                <h3 style="color: #333; margin-bottom: 15px;">🖼️ Add Logo/Image to Slips (Optional)</h3>
-                <div class="upload-section" style="padding: 20px; margin: 10px 0;" onclick="document.getElementById('imageInput').click()">
-                    <input type="file" id="imageInput" accept="image/*">
-                    <p style="color: #666;">Click to upload an image (Logo, Photo, etc.)</p>
-                    <p style="color: #999; font-size: 12px; margin-top: 5px;">Image will appear on the left side of each slip</p>
-                </div>
-                <div id="imagePreview" class="hidden" style="margin-top: 15px;">
-                    <img id="previewImg" style="max-width: 150px; max-height: 150px; border: 2px solid #667eea; border-radius: 10px;">
-                    <p style="margin-top: 10px; color: #667eea; font-weight: 600;">✓ Image uploaded successfully</p>
-                    <button class="btn" onclick="removeImage()" style="padding: 8px 20px; font-size: 14px; margin-top: 10px;">Remove Image</button>
-                </div>
             </div>
         </div>
 
@@ -308,6 +349,10 @@
                 <div class="stat-row">
                     <strong>Total Pages (4 slips/page):</strong>
                     <span id="totalPages">0</span>
+                </div>
+                <div class="stat-row" id="imageStatus">
+                    <strong>Image Status:</strong>
+                    <span id="imageStatusText">No image uploaded</span>
                 </div>
             </div>
 
@@ -333,6 +378,62 @@
         let uploadedImage = null;
         const SLIPS_PER_PAGE = 4;
 
+        // Image upload handler with proper loading
+        document.getElementById('imageInput').addEventListener('change', function (e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (!file.type.startsWith('image/')) {
+                alert('Please upload a valid image file');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                // Create an actual image element to ensure it's properly loaded
+                const img = new Image();
+                img.onload = function() {
+                    // Draw to canvas to ensure it's a valid image
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    
+                    // Convert back to base64
+                    uploadedImage = canvas.toDataURL('image/png');
+                    document.getElementById('previewImg').src = uploadedImage;
+                    document.getElementById('imagePreview').classList.remove('hidden');
+                    console.log('✓ Image processed and ready. Size:', Math.round(uploadedImage.length / 1024), 'KB');
+                    updateImageStatus();
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        function removeImage() {
+            uploadedImage = null;
+            document.getElementById('imageInput').value = '';
+            document.getElementById('imagePreview').classList.add('hidden');
+            console.log('✗ Image removed');
+            updateImageStatus();
+        }
+
+        function updateImageStatus() {
+            const statusText = document.getElementById('imageStatusText');
+            if (statusText) {
+                if (uploadedImage) {
+                    statusText.textContent = '✓ Image uploaded (' + Math.round(uploadedImage.length / 1024) + ' KB)';
+                    statusText.style.color = '#28a745';
+                } else {
+                    statusText.textContent = '✗ No image uploaded';
+                    statusText.style.color = '#666';
+                }
+            }
+        }
+
+        // File upload handler
         document.getElementById('fileInput').addEventListener('change', function (e) {
             const file = e.target.files[0];
             if (!file) return;
@@ -345,30 +446,6 @@
                 readExcel(file);
             }
         });
-
-        document.getElementById('imageInput').addEventListener('change', function (e) {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            if (!file.type.startsWith('image/')) {
-                alert('Please upload a valid image file');
-                return;
-            }
-
-            const reader = new FileReader();
-            reader.onload = function (e) {
-                uploadedImage = e.target.result;
-                document.getElementById('previewImg').src = uploadedImage;
-                document.getElementById('imagePreview').classList.remove('hidden');
-            };
-            reader.readAsDataURL(file);
-        });
-
-        function removeImage() {
-            uploadedImage = null;
-            document.getElementById('imageInput').value = '';
-            document.getElementById('imagePreview').classList.add('hidden');
-        }
 
         function readCSV(file) {
             const reader = new FileReader();
@@ -443,6 +520,7 @@
                 allData.push(row);
             }
 
+            console.log('Data processed. Image available:', uploadedImage ? 'YES' : 'NO');
             showPreview();
         }
 
@@ -472,16 +550,21 @@
 
             document.getElementById('totalRecords').textContent = allData.length;
             document.getElementById('totalPages').textContent = Math.ceil(allData.length / SLIPS_PER_PAGE);
+            
+            updateImageStatus();
 
             document.getElementById('uploadSection').classList.add('hidden');
             document.getElementById('previewSection').classList.remove('hidden');
         }
 
         function generateSlips() {
+            console.log('=== GENERATING SLIPS ===');
+            console.log('Data rows:', allData.length);
+            console.log('Image available:', uploadedImage ? 'YES' : 'NO');
+            
             const slipsContainer = document.getElementById('slipsContainer');
             slipsContainer.innerHTML = '';
 
-            // Only generate first 20 slips for preview
             const previewCount = Math.min(20, allData.length);
             
             for (let i = 0; i < previewCount; i++) {
@@ -489,7 +572,6 @@
                 slipsContainer.appendChild(slip);
             }
 
-            // Show message if there are more slips
             if (allData.length > previewCount) {
                 const messageDiv = document.createElement('div');
                 messageDiv.style.cssText = 'text-align: center; padding: 30px; background: #f8f9ff; border-radius: 10px; margin: 20px 0;';
@@ -511,25 +593,22 @@
 
             let html = '';
 
-            // Add image on left side if uploaded
             if (uploadedImage) {
                 html += `
                     <div class="slip-image">
-                        <img src="${uploadedImage}" alt="Logo">
+                        <img src="${uploadedImage}" alt="Logo" style="display: block;">
                     </div>
                 `;
             }
 
-            // Add slip content
             html += '<div class="slip-content">';
 
             const fields = Object.keys(data);
-            const firstField = fields[0]; // Get the first column (Sl No)
-            const lastField = fields[fields.length - 1]; // Get the last column name
+            const firstField = fields[0];
+            const lastField = fields[fields.length - 1];
             const slNoValue = data[firstField] || '';
             const lastFieldValue = data[lastField] || '';
             
-            // Show Sl No on left and last column value on right at the top
             html += `
                 <div class="slip-number">
                     <span class="sl-no">${slNoValue}</span>
@@ -537,7 +616,6 @@
                 </div>
             `;
             
-            // Show all other fields except the first (Sl No) and last one
             fields.forEach(field => {
                 if (field !== lastField && field !== firstField) {
                     const value = data[field] || '';
@@ -550,7 +628,7 @@
                 }
             });
 
-            html += '</div>'; // Close slip-content
+            html += '</div>';
 
             slipDiv.innerHTML = html;
             return slipDiv;
@@ -572,12 +650,15 @@
 
         async function downloadPDF() {
             try {
+                console.log('=== PDF GENERATION STARTED ===');
+                console.log('Total slips:', allData.length);
+                console.log('Image available:', uploadedImage ? 'YES' : 'NO');
+
                 if (!allData || allData.length === 0) {
                     alert('No data available. Please upload data first.');
                     return;
                 }
 
-                // Show progress indicator
                 const progressDiv = document.createElement('div');
                 progressDiv.id = 'pdfProgress';
                 progressDiv.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); z-index: 9999; text-align: center; min-width: 300px;';
@@ -588,40 +669,28 @@
                 const pdf = new jsPDF('p', 'mm', 'a4');
                 const pageWidth = 210;
                 const pageHeight = 297;
-                const slipSpacing = 15; // 0.5cm = 5mm spacing between slips
+                const slipSpacing = 5; // 0.5cm spacing
                 const availableHeight = pageHeight - (slipSpacing * (SLIPS_PER_PAGE - 1));
                 const slipHeight = availableHeight / SLIPS_PER_PAGE;
 
                 const totalSlips = allData.length;
                 const totalPages = Math.ceil(totalSlips / SLIPS_PER_PAGE);
-                
-                console.log('Starting PDF generation for', totalSlips, 'slips across', totalPages, 'pages');
-                
-                // Create a temporary container for rendering
+
                 const tempContainer = document.createElement('div');
-                tempContainer.style.cssText = 'position: absolute; left: -9999px; top: 0; width: 800px;';
+                tempContainer.style.cssText = 'position: absolute; left: -9999px; top: 0; width: 800px; background: white;';
                 document.body.appendChild(tempContainer);
 
-                // Process each page
                 for (let pageNum = 0; pageNum < totalPages; pageNum++) {
                     if (pageNum > 0) {
                         pdf.addPage();
                     }
 
-                    // Update progress
                     const progress = Math.round((pageNum / totalPages) * 100);
                     document.getElementById('progressText').textContent = progress + '%';
                     document.getElementById('progressDetail').textContent = `Processing page ${pageNum + 1} of ${totalPages}`;
 
-                    // Create slips for this page using the new pattern
                     tempContainer.innerHTML = '';
                     const pageSlips = [];
-                    
-                    // Calculate which slips go on this page
-                    // Position 0 (top): slip 1, 2, 3, 4...
-                    // Position 1 (second): slip 26, 27, 28, 29... (pageNum + totalPages)
-                    // Position 2 (third): slip 51, 52, 53, 54... (pageNum + 2*totalPages)
-                    // Position 3 (fourth): slip 76, 77, 78, 79... (pageNum + 3*totalPages)
                     
                     for (let position = 0; position < SLIPS_PER_PAGE; position++) {
                         const slipIndex = pageNum + (position * totalPages);
@@ -636,52 +705,74 @@
                         }
                     }
 
-                    // Wait for images to load
-                    await new Promise(resolve => setTimeout(resolve, 150));
+                    // Wait for DOM to settle
+                    await new Promise(resolve => setTimeout(resolve, 300));
 
-                    // Render slips one by one (more stable for large datasets)
+                    // Pre-load images by forcing them into Image objects
+                    if (uploadedImage) {
+                        const imgs = tempContainer.getElementsByTagName('img');
+                        console.log('Found', imgs.length, 'images on page', pageNum + 1);
+                        
+                        for (let img of imgs) {
+                            // Ensure image is loaded
+                            if (!img.complete || img.naturalHeight === 0) {
+                                await new Promise((resolve) => {
+                                    img.onload = resolve;
+                                    img.onerror = resolve;
+                                    // Trigger reload
+                                    const src = img.src;
+                                    img.removeAttribute('src');
+                                    img.src = src;
+                                    // Fallback timeout
+                                    setTimeout(resolve, 2000);
+                                });
+                            }
+                        }
+                        console.log('All images ready on page', pageNum + 1);
+                    }
+
+                    // Additional wait for rendering
+                    await new Promise(resolve => setTimeout(resolve, 200));
+
+                    // Render slips
                     for (let idx = 0; idx < pageSlips.length; idx++) {
                         try {
+                            console.log('Rendering slip', idx + 1, 'on page', pageNum + 1);
+                            
                             const canvas = await html2canvas(pageSlips[idx].slip, {
-                                scale: 1.5, // Reduced from 2 to save memory
-                                useCORS: true,
+                                scale: 2,
+                                useCORS: false,
                                 logging: false,
                                 backgroundColor: '#ffffff',
                                 allowTaint: true,
+                                foreignObjectRendering: false,
                                 imageTimeout: 0
                             });
                             
                             const yOffset = (pageSlips[idx].index * slipHeight) + (pageSlips[idx].index * slipSpacing);
-                            // Use JPEG with compression for smaller file size
-                            const imgData = canvas.toDataURL('image/jpeg', 0.75);
+                            const imgData = canvas.toDataURL('image/jpeg', 0.85);
                             const imgWidth = pageWidth;
                             const imgHeight = (canvas.height * imgWidth) / canvas.width;
                             pdf.addImage(imgData, 'JPEG', 0, yOffset, imgWidth, Math.min(imgHeight, slipHeight), undefined, 'FAST');
                             
-                            // Clear canvas to free memory
                             canvas.width = 0;
                             canvas.height = 0;
                         } catch (error) {
-                            console.error('Error rendering slip:', pageNum, 'position', idx, error);
+                            console.error('Error rendering slip:', error);
                         }
                     }
 
-                    // Small delay to keep UI responsive
                     await new Promise(resolve => setTimeout(resolve, 50));
                 }
 
-                console.log('PDF generation complete');
-
-                // Clean up
                 document.body.removeChild(tempContainer);
                 
-                // Update progress to 100%
                 document.getElementById('progressText').textContent = '100%';
                 document.getElementById('progressDetail').textContent = 'Saving PDF...';
                 
                 await new Promise(resolve => setTimeout(resolve, 500));
 
-                pdf.save('malayalam-slips.pdf');
+                pdf.save('vote-slips.pdf');
                 
                 document.body.removeChild(progressDiv);
                 alert('✓ PDF generated successfully with ' + totalSlips + ' slips!');
@@ -692,7 +783,7 @@
                 if (progressDiv) {
                     document.body.removeChild(progressDiv);
                 }
-                alert('❌ Error generating PDF: ' + error.message + '\n\nPlease check the browser console for details.');
+                alert('❌ Error generating PDF: ' + error.message);
             }
         }
     </script>
